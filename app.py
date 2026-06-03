@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, render_template
 import pickle
 import pandas as pd
-import mysql.connector
+import sqlite3
+import re
 from datetime import datetime
 
 app = Flask(__name__)
@@ -13,14 +14,29 @@ with open('fraud_model.pkl', 'rb') as f:
 with open('feature_columns.pkl', 'rb') as f:
     feature_columns = pickle.load(f)
 
-# MySQL connection
-def get_db():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Shannu@2669",  # change this
-        database="fraud_detection"
-    )
+# Initialize SQLite database
+def init_db():
+    conn = sqlite3.connect('fraud.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            amount REAL,
+            transaction_hour INTEGER,
+            foreign_transaction INTEGER,
+            location_mismatch INTEGER,
+            device_trust_score REAL,
+            velocity_last_24h INTEGER,
+            merchant_category TEXT,
+            result TEXT,
+            confidence REAL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
 
 @app.route('/')
 def home():
@@ -33,6 +49,9 @@ def predict():
     # Convert to dataframe
     df = pd.DataFrame([data])
     df = pd.get_dummies(df)
+
+    # Fix column names
+    df.columns = [re.sub(r'[^A-Za-z0-9_]', '_', col) for col in df.columns]
     df = df.reindex(columns=feature_columns, fill_value=0)
 
     # Predict
@@ -41,23 +60,22 @@ def predict():
     result = 'FRAUD' if prediction == 1 else 'LEGITIMATE'
     confidence = round(float(probability) * 100, 2)
 
-    # Save to MySQL
+    # Save to SQLite
     try:
-        conn = get_db()
+        conn = sqlite3.connect('fraud.db')
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute('''
             INSERT INTO predictions 
-            (amount, transaction_hour, foreign_transaction, location_mismatch, 
+            (amount, transaction_hour, foreign_transaction, location_mismatch,
              device_trust_score, velocity_last_24h, merchant_category, result, confidence)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
             data['amount'], data['transaction_hour'],
             data['foreign_transaction'], data['location_mismatch'],
             data['device_trust_score'], data['velocity_last_24h'],
             data['merchant_category'], result, confidence
         ))
         conn.commit()
-        cursor.close()
         conn.close()
     except Exception as e:
         print("DB Error:", e)
@@ -66,11 +84,11 @@ def predict():
 
 @app.route('/dashboard')
 def dashboard():
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    conn = sqlite3.connect('fraud.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
     cursor.execute("SELECT * FROM predictions ORDER BY timestamp DESC LIMIT 50")
     records = cursor.fetchall()
-    cursor.close()
     conn.close()
     return render_template('dashboard.html', records=records)
 
