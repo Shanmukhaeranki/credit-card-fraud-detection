@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fraud Detection Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background: #f5f5f5; }
+        h1 { color: #333; text-align: center; }
+        .stats { display: flex; gap: 20px; justify-content: center; margin: 30px 0; }
+        .card { background: white; padding: 20px 40px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .card h2 { margin: 0; font-size: 36px; }
+        .card p { margin: 5px 0 0; color: #666; }
+        .fraud-card h2 { color: #c62828; }
+        .legit-card h2 { color: #2e7d32; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        th { background: #333; color: white; padding: 12px; text-align: left; }
+        td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+        .fraud-tag { background: #ffebee; color: #c62828; padding: 4px 10px; border-radius: 20px; font-weight: bold; }
+        .legit-tag { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 20px; font-weight: bold; }
+        .back-btn { display: block; text-align: center; margin: 20px auto; width: 200px; padding: 10px; background: #4CAF50; color: white; text-decoration: none; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <h1>📊 Fraud Detection Dashboard</h1>
+
+    <!-- Stats Cards -->
+    {% set fraud_count = records | selectattr('result', 'equalto', 'FRAUD') | list | length %}
+    {% set legit_count = records | selectattr('result', 'equalto', 'LEGITIMATE') | list | length %}
+
+    <div class="stats">
+        <div class="card">
+            <h2>{{ records | length }}</h2>
+            <p>Total Transactions</p>
+        </div>
+        <div class="card fraud-card">
+            <h2>{{ fraud_count }}</h2>
+            <p>Fraud Detected</p>
+        </div>
+        <div class="card legit-card">
+            <h2>{{ legit_count }}</h2>
+            <p>Legitimate</p>
+        </div>
+    </div>
+
+    <!-- Predictions Table -->
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Amount</th>
+                <th>Hour</th>
+                <th>Foreign</th>
+                <th>Location Mismatch</th>
+                <th>Merchant</th>
+                <th>Confidence</th>
+                <th>Result</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>₹{{ r.amount }}</td>
+                <td>{{ r.transaction_hour }}:00</td>
+                <td>{{ 'Yes' if r.foreign_transaction else 'No' }}</td>
+                <td>{{ 'Yes' if r.location_mismatch else 'No' }}</td>
+                <td>{{ r.merchant_category }}</td>
+                <td>{{ r.confidence }}%</td>
+                <td>
+                    {% if r.result == 'FRAUD' %}
+                        <span class="fraud-tag">🚨 FRAUD</span>
+                    {% else %}
+                        <span class="legit-tag">✅ LEGIT</span>
+                    {% endif %}
+                </td>
+                <td>{{ r.timestamp }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="/" class="back-btn">← Check Transaction</a>
+
+</body>
+</html>
